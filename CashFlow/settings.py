@@ -42,12 +42,17 @@ else:
     ]
 
 
+_csrf_default = (
+    'http://localhost,http://127.0.0.1,http://localhost:5173'
+    if IS_DEVELOPMENT
+    else (
+        'https://cashflow.cpaldaca.com,https://dev.cpaldaca.com,'
+        'https://cpaldaca.com,https://www.cpaldaca.com'
+    )
+)
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get(
-        'CSRF_TRUSTED_ORIGINS',
-        'http://localhost,http://127.0.0.1',
-    ).split(',')
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', _csrf_default).split(',')
     if origin.strip()
 ]
 
@@ -67,6 +72,7 @@ INSTALLED_APPS = [
     'organizations',
     'BCV',
     'superadmin_panel',
+    'paldaca_embed',
 ]
 
 MIDDLEWARE = [
@@ -76,9 +82,13 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Después de Authentication (redirect al shell, si se activara, necesita
+    # request.user) y ANTES de SuperuserPanelMiddleware. Sin XFrameOptions:
+    # DENY dejaría el iframe del Portal en blanco. El framing lo hace
+    # PaldacaEmbedMiddleware con CSP frame-ancestors.
+    'paldaca_embed.embed.PaldacaEmbedMiddleware',
     'superadmin_panel.middleware.SuperuserPanelMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'CashFlow.urls'
@@ -96,6 +106,7 @@ TEMPLATES = [
                 'superadmin_panel.context_processors.superadmin_panel',
                 'accounts.context_processors.user_permissions',
                 'organizations.context_processors.estado_cuentas',
+                'paldaca_embed.context_processors.paldaca_embed',
             ],
         },
     },
@@ -355,3 +366,39 @@ if IS_DEVELOPMENT and os.environ.get('DJANGO_SQL_LOG', '').lower() in ('1', 'tru
 
 # Default primary key field type to avoid warnings
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# -----------------------------------------------------------------------------
+# Portal unificado: iframe en cpaldaca.com/cashflow (sin SSO en este corte)
+# 100% env-driven: este archivo es merge=ours entre main/dev.
+# -----------------------------------------------------------------------------
+PALDACA_MODULO_CODIGO = os.environ.get('PALDACA_MODULO_CODIGO', 'cashflow')
+
+PALDACA_PORTAL_URL = (
+    (os.environ.get('PALDACA_PORTAL_URL') or '').strip().rstrip('/')
+    or ('http://localhost:5173' if IS_DEVELOPMENT else 'https://cpaldaca.com')
+)
+
+PALDACA_SHELL_PATH = os.environ.get('PALDACA_SHELL_PATH', '/cashflow')
+
+_frame_ancestors = ["'self'", PALDACA_PORTAL_URL]
+if IS_DEVELOPMENT:
+    _frame_ancestors += ['http://localhost:5173', 'http://127.0.0.1:5173']
+else:
+    _frame_ancestors += ['https://cpaldaca.com', 'https://www.cpaldaca.com']
+PALDACA_FRAME_ANCESTORS = os.environ.get(
+    'PALDACA_FRAME_ANCESTORS',
+    ' '.join(dict.fromkeys(a for a in _frame_ancestors if a)),
+)
+
+PALDACA_EMBED_REDIRECT_TO_SHELL = os.environ.get(
+    'PALDACA_EMBED_REDIRECT_TO_SHELL', 'false'
+).lower() in ('1', 'true', 'yes')
+
+PALDACA_EMBED_EXCLUDED_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.environ.get(
+        'PALDACA_EMBED_EXCLUDED_PREFIXES',
+        '/admin/,/static/,/media/,/accounts/,/superadmin/,/bcv/,/proyectos/compartido/,/healthz/',
+    ).split(',')
+    if prefix.strip()
+)

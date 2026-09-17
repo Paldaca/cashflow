@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="{% static 'css/base/base.css' %}">
+    {% if paldaca_embedded %}{% include "includes/paldaca_embed.html" %}{% endif %}
     {% block extra_css %}{% endblock %}
     <script>
         // Apply theme immediately to prevent flash of unstyled content
@@ -21,9 +22,9 @@
 </head>
 <body
     id="appLayout"
-    class="{% if user.is_authenticated and not hide_sidebar %}app-layout has-sidebar{% else %}app-layout{% endif %}"
+    class="{% if user.is_authenticated and not hide_sidebar and not paldaca_embedded %}app-layout has-sidebar{% else %}app-layout{% endif %}"
 >
-    {% if user.is_authenticated and not hide_sidebar %}
+    {% if user.is_authenticated and not hide_sidebar and not paldaca_embedded %}
     {% with current_url=request.resolver_match.url_name|default:"" %}
     <aside class="app-sidebar" id="appSidebar" aria-label="Menú principal">
         <div class="app-sidebar-brand">
@@ -97,7 +98,7 @@
     {% endif %}
 
     <div class="app-main-content">
-        {% if not hide_navbar %}
+        {% if not hide_navbar and not paldaca_embedded %}
         <nav class="cf-navbar">
             <div class="cf-navbar__inner">
                 <div class="cf-navbar__title">
