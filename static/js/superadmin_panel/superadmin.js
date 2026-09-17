@@ -653,3 +653,345 @@ function initSuperadminBcvRates(config) {
     dateTextEl.textContent = formatDateLabel(state.selectedDate);
     renderCalendar();
 }
+
+/* --- Proyectos por organización y accesos de sus miembros --- */
+function initSuperadminProjects(config) {
+    var dataEl = document.getElementById('saProjectsData');
+    var orgs = dataEl ? JSON.parse(dataEl.textContent) : [];
+    var orgsById = {};
+    var projectsById = {};
+
+    orgs.forEach(function (org) {
+        orgsById[org.id] = org;
+        (org.projects || []).forEach(function (project) {
+            project.orgId = org.id;
+            project.orgName = org.name;
+            projectsById[project.id] = project;
+        });
+    });
+
+    var sections = Array.prototype.slice.call(document.querySelectorAll('.sa-proj-org'));
+    var searchInput = document.getElementById('projSearchInput');
+    var noResults = document.getElementById('projNoResults');
+
+    var accessModal = document.getElementById('projectAccessModal');
+    var accessForm = document.getElementById('projectAccessForm');
+    var accessTitle = document.getElementById('projectAccessTitle');
+    var accessHint = document.getElementById('projectAccessHint');
+    var accessList = document.getElementById('projectAccessList');
+    var accessNote = document.getElementById('projectAccessNote');
+    var accessSearch = document.getElementById('projectAccessSearch');
+    var accessSubmit = document.getElementById('projectAccessSubmit');
+
+    var matrixForm = document.getElementById('projectMatrixForm');
+    var matrixTitle = document.getElementById('projectMatrixTitle');
+    var matrixHint = document.getElementById('projectMatrixHint');
+    var matrixWrap = document.getElementById('projectMatrixWrap');
+    var matrixSubmit = document.getElementById('projectMatrixSubmit');
+
+    function escapeHtml(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function initial(username) {
+        return escapeHtml(String(username || '?').charAt(0).toUpperCase());
+    }
+
+    function memberSecondary(member) {
+        return [member.name, member.email].filter(Boolean).join(' · ');
+    }
+
+    /* --- Acordeón por organización --- */
+
+    function setOrgOpen(section, open) {
+        var header = section.querySelector('.sa-proj-org__header');
+        var body = section.querySelector('.sa-proj-org__body');
+        section.classList.toggle('is-open', open);
+        if (header) header.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (body) body.hidden = !open;
+    }
+
+    sections.forEach(function (section) {
+        var header = section.querySelector('.sa-proj-org__header');
+        if (!header) return;
+        header.addEventListener('click', function () {
+            setOrgOpen(section, !section.classList.contains('is-open'));
+        });
+    });
+
+    var expandAllBtn = document.getElementById('projExpandAll');
+    var collapseAllBtn = document.getElementById('projCollapseAll');
+    if (expandAllBtn) {
+        expandAllBtn.addEventListener('click', function () {
+            sections.forEach(function (section) {
+                if (!section.hidden) setOrgOpen(section, true);
+            });
+        });
+    }
+    if (collapseAllBtn) {
+        collapseAllBtn.addEventListener('click', function () {
+            sections.forEach(function (section) { setOrgOpen(section, false); });
+        });
+    }
+
+    /* --- Búsqueda: filtra organizaciones y, dentro de ellas, proyectos --- */
+
+    function applySearch(rawQuery) {
+        var query = (rawQuery || '').trim().toLowerCase();
+        var anyVisible = false;
+
+        sections.forEach(function (section) {
+            var haystack = section.getAttribute('data-search') || '';
+            var orgMatch = !query || haystack.indexOf(query) !== -1;
+            var rows = section.querySelectorAll('tbody tr[data-search]');
+            var matchedRows = 0;
+
+            rows.forEach(function (row) {
+                var rowMatch = !query || orgMatch
+                    || (row.getAttribute('data-search') || '').indexOf(query) !== -1;
+                row.hidden = !rowMatch;
+                if (query && !orgMatch && rowMatch) matchedRows += 1;
+            });
+
+            var visible = orgMatch || matchedRows > 0;
+            section.hidden = !visible;
+            if (visible) {
+                anyVisible = true;
+                // Al buscar se abre lo que coincide para que el resultado se vea.
+                if (query) setOrgOpen(section, true);
+            }
+        });
+
+        if (noResults) {
+            noResults.classList.toggle('cf-hidden', anyVisible || !sections.length);
+        }
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            applySearch(searchInput.value);
+        });
+    }
+
+    /* --- Modal: accesos de un proyecto --- */
+
+    function buildMemberItem(member, checked) {
+        var label = document.createElement('label');
+        label.className = 'sa-access-item sa-access-item--member';
+        label.setAttribute(
+            'data-search',
+            (member.username + ' ' + (member.name || '') + ' ' + (member.email || '')).toLowerCase()
+        );
+        var secondary = memberSecondary(member);
+        label.innerHTML =
+            '<input type="checkbox" class="sa-access-checkbox" name="users" value="' + member.id + '"'
+            + (checked ? ' checked' : '') + '>'
+            + '<span class="sa-access-item__avatar">' + initial(member.username) + '</span>'
+            + '<span class="sa-access-item__info"><strong>' + escapeHtml(member.username) + '</strong>'
+            + (secondary ? '<small>' + escapeHtml(secondary) + '</small>' : '')
+            + '</span>'
+            + (member.org
+                ? '<span class="sa-access-item__tag" title="Miembro de otra organización con la que el proyecto está compartido">'
+                    + escapeHtml(member.org) + '</span>'
+                : '');
+        return label;
+    }
+
+    function openProjectAccess(projectId) {
+        var project = projectsById[projectId];
+        if (!project) return;
+
+        accessForm.action = config.accesosUrlTemplate.replace('{id}', project.id);
+        accessTitle.textContent = 'Accesos — ' + project.name;
+        accessHint.innerHTML = 'Organización <strong>' + escapeHtml(project.orgName)
+            + '</strong> · Marque los miembros que podrán ver y usar este proyecto.';
+
+        var selected = {};
+        (project.member_ids || []).forEach(function (id) { selected[id] = true; });
+
+        accessList.innerHTML = '';
+        if (!(project.eligible || []).length) {
+            accessList.innerHTML = '<p class="sa-proj-modal-empty">Esta organización no tiene miembros '
+                + 'asignados. Agregue usuarios a la organización para poder darles acceso al proyecto.</p>';
+            accessSubmit.disabled = true;
+        } else {
+            project.eligible.forEach(function (member) {
+                accessList.appendChild(buildMemberItem(member, !!selected[member.id]));
+            });
+            accessSubmit.disabled = false;
+        }
+
+        if (project.outside_count) {
+            accessNote.textContent = project.outside_count + ' usuario(s) con acceso pertenecen a otra '
+                + 'organización con la que el proyecto está compartido.';
+            accessNote.classList.remove('cf-hidden');
+        } else {
+            accessNote.textContent = '';
+            accessNote.classList.add('cf-hidden');
+        }
+
+        if (accessSearch) {
+            accessSearch.value = '';
+            filterAccessList('');
+        }
+        CFModal.open('projectAccessModal');
+    }
+
+    function filterAccessList(rawQuery) {
+        var query = (rawQuery || '').trim().toLowerCase();
+        accessList.querySelectorAll('.sa-access-item').forEach(function (item) {
+            var haystack = item.getAttribute('data-search') || '';
+            item.hidden = !!query && haystack.indexOf(query) === -1;
+        });
+    }
+
+    if (accessSearch) {
+        accessSearch.addEventListener('input', function () {
+            filterAccessList(accessSearch.value);
+        });
+    }
+
+    if (accessModal) {
+        accessModal.querySelectorAll('[data-access-select]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var checked = btn.getAttribute('data-access-select') === 'all';
+                accessList.querySelectorAll('.sa-access-item').forEach(function (item) {
+                    if (item.hidden) return;
+                    var cb = item.querySelector('input[name="users"]');
+                    if (cb) cb.checked = checked;
+                });
+            });
+        });
+    }
+
+    /* --- Modal: matriz miembros × proyectos --- */
+
+    function syncColumnToggle(projectId) {
+        var toggle = matrixWrap.querySelector('.sa-matrix-col-toggle[data-project="' + projectId + '"]');
+        if (!toggle) return;
+        var cells = matrixWrap.querySelectorAll('input[name="access"][data-project="' + projectId + '"]');
+        var checked = 0;
+        cells.forEach(function (cb) { if (cb.checked) checked += 1; });
+        toggle.checked = cells.length > 0 && checked === cells.length;
+        toggle.indeterminate = checked > 0 && checked < cells.length;
+    }
+
+    function buildMatrixTable(org) {
+        var head = '<thead><tr><th class="sa-matrix-corner">Miembro</th>';
+        org.projects.forEach(function (project) {
+            head += '<th class="sa-matrix-col-head">'
+                + '<label class="sa-matrix-col" title="Marcar o desmarcar a todos los miembros en «'
+                + escapeHtml(project.name) + '»">'
+                + '<input type="checkbox" class="sa-matrix-col-toggle" data-project="' + project.id + '">'
+                + '<span class="sa-matrix-col__name">' + escapeHtml(project.name) + '</span>'
+                + '</label></th>';
+        });
+        head += '</tr></thead>';
+
+        var body = '<tbody>';
+        org.members.forEach(function (member) {
+            var secondary = memberSecondary(member);
+            body += '<tr><th scope="row" class="sa-matrix-member">'
+                + '<span class="sa-access-item__avatar">' + initial(member.username) + '</span>'
+                + '<span class="sa-access-item__info"><strong>' + escapeHtml(member.username) + '</strong>'
+                + (secondary ? '<small>' + escapeHtml(secondary) + '</small>' : '')
+                + '</span></th>';
+            org.projects.forEach(function (project) {
+                var checked = (project.member_ids || []).indexOf(member.id) !== -1;
+                body += '<td class="sa-matrix-cell-wrap">'
+                    + '<label class="sa-matrix-cell" title="' + escapeHtml(member.username)
+                    + ' · ' + escapeHtml(project.name) + '">'
+                    + '<input type="checkbox" name="access" data-project="' + project.id + '"'
+                    + ' value="' + project.id + ':' + member.id + '"' + (checked ? ' checked' : '') + '>'
+                    + '<span class="sa-matrix-mark" aria-hidden="true"><i class="fa-solid fa-check"></i></span>'
+                    + '</label></td>';
+            });
+            body += '</tr>';
+        });
+        body += '</tbody>';
+
+        var table = document.createElement('table');
+        table.className = 'sa-matrix';
+        table.innerHTML = head + body;
+        return table;
+    }
+
+    function bindMatrix() {
+        matrixWrap.querySelectorAll('input[name="access"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                syncColumnToggle(cb.getAttribute('data-project'));
+            });
+        });
+        matrixWrap.querySelectorAll('.sa-matrix-col-toggle').forEach(function (toggle) {
+            var projectId = toggle.getAttribute('data-project');
+            syncColumnToggle(projectId);
+            toggle.addEventListener('change', function () {
+                var checked = toggle.checked;
+                matrixWrap.querySelectorAll('input[name="access"][data-project="' + projectId + '"]')
+                    .forEach(function (cb) { cb.checked = checked; });
+                toggle.indeterminate = false;
+            });
+        });
+    }
+
+    function openMatrix(orgId) {
+        var org = orgsById[orgId];
+        if (!org) return;
+
+        matrixForm.action = config.matrizUrlTemplate.replace('{id}', org.id);
+        matrixTitle.textContent = 'Matriz de accesos — ' + org.name;
+        matrixWrap.innerHTML = '';
+
+        if (!(org.projects || []).length || !(org.members || []).length) {
+            matrixHint.textContent = 'La organización necesita al menos un proyecto y un miembro para usar la matriz.';
+            matrixWrap.innerHTML = '<p class="sa-proj-modal-empty">No hay datos suficientes para construir la matriz.</p>';
+            matrixSubmit.disabled = true;
+        } else {
+            matrixHint.textContent = 'Marque las casillas para dar acceso: ' + org.members.length
+                + ' miembro(s) × ' + org.projects.length + ' proyecto(s).';
+            matrixWrap.appendChild(buildMatrixTable(org));
+            bindMatrix();
+            matrixSubmit.disabled = false;
+        }
+        CFModal.open('projectMatrixModal');
+    }
+
+    document.querySelectorAll('[data-matrix-select]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var checked = btn.getAttribute('data-matrix-select') === 'all';
+            matrixWrap.querySelectorAll('input[name="access"]').forEach(function (cb) {
+                cb.checked = checked;
+            });
+            matrixWrap.querySelectorAll('.sa-matrix-col-toggle').forEach(function (toggle) {
+                syncColumnToggle(toggle.getAttribute('data-project'));
+            });
+        });
+    });
+
+    document.querySelectorAll('[data-project-access]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openProjectAccess(parseInt(btn.getAttribute('data-project-access'), 10));
+        });
+    });
+
+    document.querySelectorAll('[data-matrix-org]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openMatrix(parseInt(btn.getAttribute('data-matrix-org'), 10));
+        });
+    });
+
+    // Tras guardar, la vista redirige con #org-<id>: se abre esa organización.
+    var hashMatch = /^#org-(\d+)$/.exec(window.location.hash || '');
+    if (hashMatch) {
+        var target = document.getElementById('org-' + hashMatch[1]);
+        if (target) {
+            setOrgOpen(target, true);
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+}

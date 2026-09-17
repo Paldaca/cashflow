@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Proyectos - Superadmin{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/superadmin_panel/superadmin.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="cf-page-header">
+    <div>
+        <h2 class="cf-page-title"><i class="fa-solid fa-diagram-project"></i> Proyectos</h2>
+        <nav class="cf-breadcrumb" aria-label="breadcrumb">
+            <span><a href="{% url 'superadmin_dashboard' %}">Superadmin</a></span>
+            <span class="cf-breadcrumb__sep cf-breadcrumb__active">Proyectos</span>
+        </nav>
+    </div>
+</div>
+
+<section class="sa-dashboard-stats cf-mb-4" aria-label="Resumen de proyectos">
+    <article class="sa-stat-tile sa-stat-tile--orgs">
+        <div class="sa-stat-tile__icon"><i class="fa-solid fa-building"></i></div>
+        <div class="sa-stat-tile__data">
+            <span class="sa-stat-tile__value">{{ stats.organizations }}</span>
+            <span class="sa-stat-tile__label">Organizaciones</span>
+        </div>
+    </article>
+    <article class="sa-stat-tile sa-stat-tile--projects">
+        <div class="sa-stat-tile__icon"><i class="fa-solid fa-diagram-project"></i></div>
+        <div class="sa-stat-tile__data">
+            <span class="sa-stat-tile__value">{{ stats.projects }}</span>
+            <span class="sa-stat-tile__label">Proyectos</span>
+        </div>
+    </article>
+    <article class="sa-stat-tile sa-stat-tile--access">
+        <div class="sa-stat-tile__icon"><i class="fa-solid fa-key"></i></div>
+        <div class="sa-stat-tile__data">
+            <span class="sa-stat-tile__value">{{ stats.accesses }}</span>
+            <span class="sa-stat-tile__label">Accesos a proyectos</span>
+        </div>
+    </article>
+</section>
+
+<div class="sa-proj-toolbar">
+    <div class="sa-proj-search">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" id="projSearchInput" class="cf-input" autocomplete="off"
+               placeholder="Buscar organización, proyecto o miembro...">
+    </div>
+    <div class="sa-proj-toolbar__actions">
+        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" id="projExpandAll">
+            <i class="fa-solid fa-chevron-down"></i> Expandir todo
+        </button>
+        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" id="projCollapseAll">
+            <i class="fa-solid fa-chevron-up"></i> Contraer todo
+        </button>
+    </div>
+</div>
+
+<div class="sa-proj-orgs" id="projOrgList">
+    {% for row in org_rows %}
+    <section class="sa-proj-org" id="org-{{ row.org.id }}" data-org-id="{{ row.org.id }}"
+             data-search="{{ row.org.name|lower }}">
+        <button type="button" class="sa-proj-org__header" aria-expanded="false" aria-controls="orgBody-{{ row.org.id }}">
+            <span class="sa-proj-org__chevron" aria-hidden="true"><i class="fa-solid fa-chevron-right"></i></span>
+            <span class="sa-proj-org__icon" aria-hidden="true"><i class="fa-solid fa-building"></i></span>
+            <span class="sa-proj-org__info">
+                <span class="sa-proj-org__name">{{ row.org.name }}</span>
+                <span class="sa-proj-org__meta">
+                    <span><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> {{ row.projects_count }} proyecto{{ row.projects_count|pluralize }}</span>
+                    <span><i class="fa-solid fa-users" aria-hidden="true"></i> {{ row.members_count }} miembro{{ row.members_count|pluralize }}</span>
+                    <span><i class="fa-solid fa-key" aria-hidden="true"></i> {{ row.accesses_count }} acceso{{ row.accesses_count|pluralize }}</span>
+                </span>
+            </span>
+        </button>
+
+        <div class="sa-proj-org__body" id="orgBody-{{ row.org.id }}" hidden>
+            {% if row.projects %}
+            <div class="sa-proj-org__actions">
+                <p class="sa-proj-org__hint cf-mb-0">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    Un miembro solo ve los proyectos en los que tenga acceso marcado.
+                </p>
+                <button type="button" class="cf-btn cf-btn--sm cf-btn--outline-secondary" data-matrix-org="{{ row.org.id }}">
+                    <i class="fa-solid fa-table-cells-large"></i> Matriz de accesos
+                </button>
+            </div>
+
+            <div class="cf-table-wrap">
+                <table class="cf-table sa-proj-table">
+                    <thead>
+                        <tr>
+                            <th class="cf-ps-4">Proyecto</th>
+                            <th>Miembros con acceso</th>
+                            <th class="sa-proj-col-num">Transacciones</th>
+                            <th class="sa-proj-col-actions cf-pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in row.projects %}
+                        <tr data-search="{{ item.project.name|lower }} {{ item.project.description|default:''|lower }}{% for member in item.granted %} {{ member.username|lower }} {{ member.get_full_name|lower }}{% endfor %}">
+                            <td class="cf-ps-4">
+                                <div class="sa-proj-name">{{ item.project.name }}</div>
+                                <div class="sa-proj-desc">{{ item.project.description|default:"Sin descripción" }}</div>
+                            </td>
+                            <td>
+                                {% if item.granted_preview %}
+                                <div class="sa-proj-chips">
+                                    {% for member in item.granted_preview %}
+                                    <span class="sa-proj-chip" title="{{ member.get_full_name|default:member.username }}">
+                                        <span class="sa-proj-chip__avatar">{{ member.username|first|upper }}</span>{{ member.username }}
+                                    </span>
+                                    {% endfor %}
+                                    {% if item.granted_extra %}
+                                    <span class="sa-proj-chip sa-proj-chip--more">+{{ item.granted_extra }}</span>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="sa-proj-noaccess">
+                                    <i class="fa-solid fa-lock" aria-hidden="true"></i> Sin miembros con acceso
+                                </span>
+                                {% endif %}
+                                {% if item.outside_count %}
+                                <div class="sa-proj-outside">
+                                    <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                                    {{ item.outside_count }} de otra organización
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="sa-proj-col-num cf-text-muted">{{ item.project.transactions_count }}</td>
+                            <td class="sa-proj-col-actions cf-pe-4">
+                                <button type="button" class="cf-btn cf-btn--sm cf-btn--outline"
+                                        data-project-access="{{ item.project.id }}">
+                                    <i class="fa-solid fa-user-lock"></i> Accesos
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="sa-proj-org__empty">
+                <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                <p class="cf-mb-0">Esta organización todavía no tiene proyectos registrados.</p>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% empty %}
+    <div class="cf-empty-state">
+        <i class="fa-solid fa-diagram-project"></i>
+        <p class="cf-fs-xl">No hay organizaciones registradas.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="sa-proj-no-results cf-hidden" id="projNoResults">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+    <p class="cf-mb-0">Ningún resultado coincide con la búsqueda.</p>
+</div>
+
+<!-- Modal: accesos de un proyecto -->
+<div class="cf-modal" id="projectAccessModal" tabindex="-1" aria-hidden="true">
+    <div class="cf-modal__backdrop"></div>
+    <div class="cf-modal__dialog">
+        <div class="cf-modal__header cf-modal__header--primary">
+            <h5 class="cf-modal__title" id="projectAccessTitle">Accesos del proyecto</h5>
+            <button type="button" class="cf-modal__close" data-cf-dismiss="modal" aria-label="Cerrar">&times;</button>
+        </div>
+        <form id="projectAccessForm" method="post" action="">
+            {% csrf_token %}
+            <div class="cf-modal__body">
+                <p class="sa-proj-modal-hint" id="projectAccessHint"></p>
+                <div class="sa-access-toolbar">
+                    <div class="sa-proj-search sa-proj-search--sm">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="search" class="cf-input cf-input--sm" id="projectAccessSearch"
+                               autocomplete="off" placeholder="Buscar miembro...">
+                    </div>
+                    <div class="sa-access-toolbar__actions">
+                        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" data-access-select="all">
+                            Marcar todos
+                        </button>
+                        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" data-access-select="none">
+                            Limpiar
+                        </button>
+                    </div>
+                </div>
+                <div class="sa-access-list" id="projectAccessList"></div>
+                <p class="sa-proj-modal-note cf-hidden" id="projectAccessNote"></p>
+            </div>
+            <div class="cf-modal__footer">
+                <button type="button" class="cf-btn cf-btn--secondary" data-cf-dismiss="modal">Cancelar</button>
+                <button type="submit" class="cf-btn cf-btn--primary" id="projectAccessSubmit">Guardar accesos</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: matriz miembros x proyectos -->
+<div class="cf-modal" id="projectMatrixModal" tabindex="-1" aria-hidden="true">
+    <div class="cf-modal__backdrop"></div>
+    <div class="cf-modal__dialog sa-matrix-dialog">
+        <div class="cf-modal__header cf-modal__header--primary">
+            <h5 class="cf-modal__title" id="projectMatrixTitle">Matriz de accesos</h5>
+            <button type="button" class="cf-modal__close" data-cf-dismiss="modal" aria-label="Cerrar">&times;</button>
+        </div>
+        <form id="projectMatrixForm" method="post" action="">
+            {% csrf_token %}
+            <div class="cf-modal__body">
+                <div class="sa-access-toolbar">
+                    <p class="sa-proj-modal-hint cf-mb-0" id="projectMatrixHint"></p>
+                    <div class="sa-access-toolbar__actions">
+                        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" data-matrix-select="all">
+                            Marcar todo
+                        </button>
+                        <button type="button" class="cf-btn cf-btn--sm cf-btn--outline" data-matrix-select="none">
+                            Limpiar
+                        </button>
+                    </div>
+                </div>
+                <div class="sa-matrix-wrap" id="projectMatrixWrap"></div>
+            </div>
+            <div class="cf-modal__footer">
+                <button type="button" class="cf-btn cf-btn--secondary" data-cf-dismiss="modal">Cancelar</button>
+                <button type="submit" class="cf-btn cf-btn--primary" id="projectMatrixSubmit">Guardar matriz</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{ projects_data|json_script:"saProjectsData" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/superadmin_panel/superadmin.js' %}"></script>
+<script>
+    initSuperadminProjects({
+        accesosUrlTemplate: "/superadmin/proyectos/{id}/accesos/",
+        matrizUrlTemplate: "/superadmin/proyectos/matriz/{id}/",
+    });
+</script>
+{% endblock %}

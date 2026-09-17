@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -14,15 +14,25 @@ import json
 
 from BCV.models import ExchangeRateHistory
 from BCV.services.bcv_scrapper import get_rate_for_date
-from CashFlow.debug import first_form_error
+from CashFlow.debug import debug_event, first_form_error
 from accounts.models import Profile
 from organizations.amounts import create_initial_balance_transaction
-from organizations.models import Account, Organization, OrganizationAccess, Transaction, TransactionAuditLog
+from organizations.models import (
+    Account,
+    Organization,
+    OrganizationAccess,
+    Project,
+    ProjectOrganizationAccess,
+    ProjectUserAccess,
+    Transaction,
+    TransactionAuditLog,
+)
 
 from .decorators import superadmin_required
 from .forms import (
     BcvRateForm,
     OrganizationAccessForm,
+    ProjectAccessForm,
     SuperadminOrganizationForm,
     SuperadminOrganizationWizardForm,
     SuperadminUserCreateForm,
@@ -72,6 +82,7 @@ def dashboard(request):
         'organizations': Organization.objects.count(),
         'users': User.objects.filter(is_active=True).count(),
         'accesses': OrganizationAccess.objects.count(),
+        'projects': Project.objects.count(),
     }
     return render(request, 'superadmin_panel/dashboard.html', {'stats': stats    })
 
@@ -392,6 +403,284 @@ def actualizar_accesos_organizacion(request, org_id):
     else:
         messages.error(request, f'No se pudieron actualizar los accesos: {first_form_error(form)}')
     return redirect('superadmin_organizaciones')
+
+
+# --- Proyectos y accesos por proyecto ---
+
+def _user_payload(user):
+    """Datos mínimos de un usuario para pintar las listas/matriz de accesos."""
+    return {
+        'id': user.id,
+        'username': user.username,
+        'name': user.get_full_name().strip(),
+        'email': user.email or '',
+    }
+
+
+def _org_members_map():
+    """Miembros de cada organización (los usuarios con OrganizationAccess), por org_id."""
+    members = {}
+    accesses = OrganizationAccess.objects.select_related('user').order_by('user__username')
+    for access in accesses:
+        members.setdefault(access.organization_id, []).append(access.user)
+    return members
+
+
+def _project_eligible_users(project, org_members):
+    """Usuarios que pueden recibir acceso a un proyecto: los miembros de la
+    organización dueña más los de las organizaciones con las que el proyecto
+    esté compartido (ProjectOrganizationAccess).
+
+    Devuelve tuplas (usuario, nombre_organizacion_externa|None); el segundo
+    elemento solo se rellena cuando el usuario llega por una organización
+    distinta a la dueña del proyecto.
+    """
+    eligible = []
+    seen = set()
+    for user in org_members.get(project.organization_id, []):
+        seen.add(user.id)
+        eligible.append((user, None))
+    for shared in project.shared_organizations.all():
+        for user in org_members.get(shared.organization_id, []):
+            if user.id in seen:
+                continue
+            seen.add(user.id)
+            eligible.append((user, shared.organization.name))
+    return eligible
+
+
+def _proyectos_url(org_id=None):
+    url = reverse('superadmin_proyectos')
+    return f'{url}#org-{org_id}' if org_id else url
+
+
+def _parse_int_set(values):
+    parsed = set()
+    for value in values:
+        try:
+            parsed.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+@superadmin_required
+def proyectos(request):
+    """Listado de proyectos agrupados por organización, con el detalle de qué
+    miembros tienen acceso a cada uno."""
+    orgs = list(Organization.objects.order_by('name'))
+    org_members = _org_members_map()
+
+    projects = (
+        Project.objects.select_related('organization')
+        .annotate(transactions_count=Count('transactions', distinct=True))
+        .prefetch_related(
+            Prefetch(
+                'user_accesses',
+                queryset=ProjectUserAccess.objects.select_related('user').order_by('user__username'),
+            ),
+            Prefetch(
+                'shared_organizations',
+                queryset=ProjectOrganizationAccess.objects.select_related('organization'),
+            ),
+        )
+        .order_by('name')
+    )
+
+    rows_by_org = {}
+    payload_by_org = {}
+    total_projects = 0
+    total_accesses = 0
+
+    for project in projects:
+        granted = [access.user for access in project.user_accesses.all()]
+        granted_ids = {user.id for user in granted}
+        owner_ids = {user.id for user in org_members.get(project.organization_id, [])}
+        # Accesos de gente ajena a la organización dueña (proyecto compartido):
+        # la matriz por organización no los toca, pero conviene avisarlo.
+        outside_count = len(granted_ids - owner_ids)
+
+        total_projects += 1
+        total_accesses += len(granted_ids)
+
+        rows_by_org.setdefault(project.organization_id, []).append({
+            'project': project,
+            'granted': granted,
+            'granted_preview': granted[:4],
+            'granted_extra': max(len(granted) - 4, 0),
+            'granted_count': len(granted),
+            'outside_count': outside_count,
+        })
+        payload_by_org.setdefault(project.organization_id, []).append({
+            'id': project.id,
+            'name': project.name,
+            'description': project.description or '',
+            'member_ids': sorted(granted_ids),
+            'eligible': [
+                dict(_user_payload(user), org=external_org)
+                for user, external_org in _project_eligible_users(project, org_members)
+            ],
+            'outside_count': outside_count,
+        })
+
+    org_rows = []
+    projects_data = []
+    for org in orgs:
+        members = org_members.get(org.id, [])
+        project_rows = rows_by_org.get(org.id, [])
+        org_rows.append({
+            'org': org,
+            'members': members,
+            'members_count': len(members),
+            'projects': project_rows,
+            'projects_count': len(project_rows),
+            'accesses_count': sum(row['granted_count'] for row in project_rows),
+        })
+        projects_data.append({
+            'id': org.id,
+            'name': org.name,
+            'members': [_user_payload(user) for user in members],
+            'projects': payload_by_org.get(org.id, []),
+        })
+
+    return render(request, 'superadmin_panel/proyectos.html', {
+        'org_rows': org_rows,
+        'projects_data': projects_data,
+        'stats': {
+            'organizations': len(orgs),
+            'projects': total_projects,
+            'accesses': total_accesses,
+        },
+    })
+
+
+@superadmin_required
+def actualizar_accesos_proyecto(request, project_id):
+    """Define qué usuarios tienen acceso a un proyecto concreto."""
+    if request.method != 'POST':
+        return redirect('superadmin_proyectos')
+
+    project = get_object_or_404(
+        Project.objects.select_related('organization').prefetch_related(
+            'shared_organizations__organization'
+        ),
+        pk=project_id,
+    )
+
+    form = ProjectAccessForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, f'No se pudieron actualizar los accesos: {first_form_error(form)}')
+        return redirect(_proyectos_url(project.organization_id))
+
+    eligible_ids = {
+        user.id for user, _ in _project_eligible_users(project, _org_members_map())
+    }
+    requested = _parse_int_set(form.cleaned_data['users'].values_list('pk', flat=True))
+    selected = requested & eligible_ids
+    rejected = requested - eligible_ids
+
+    # Solo se tocan los accesos de usuarios elegibles: si quedara alguno de un
+    # usuario que ya no pertenece a ninguna organización del proyecto, se respeta.
+    current = set(
+        ProjectUserAccess.objects.filter(project=project, user_id__in=eligible_ids)
+        .values_list('user_id', flat=True)
+    )
+    to_add = selected - current
+    to_remove = current - selected
+
+    with transaction.atomic():
+        if to_remove:
+            ProjectUserAccess.objects.filter(project=project, user_id__in=to_remove).delete()
+        if to_add:
+            ProjectUserAccess.objects.bulk_create(
+                [ProjectUserAccess(project=project, user_id=user_id) for user_id in to_add],
+                ignore_conflicts=True,
+            )
+
+    debug_event(
+        'proyecto.accesos.actualizado',
+        user_id=request.user.id,
+        project_id=project.id,
+        org_id=project.organization_id,
+        otorgados=len(to_add),
+        revocados=len(to_remove),
+    )
+
+    messages.success(
+        request,
+        f'Accesos actualizados para el proyecto "{project.name}": '
+        f'{len(selected)} usuario(s) con acceso.'
+    )
+    if rejected:
+        messages.warning(
+            request,
+            'Se ignoraron usuarios que no pertenecen a la organización del proyecto '
+            'ni a una organización con la que esté compartido.'
+        )
+    return redirect(_proyectos_url(project.organization_id))
+
+
+@superadmin_required
+def actualizar_matriz_accesos_proyectos(request, org_id):
+    """Guarda de una sola vez la matriz miembros × proyectos de una organización."""
+    if request.method != 'POST':
+        return redirect('superadmin_proyectos')
+
+    org = get_object_or_404(Organization, pk=org_id)
+    project_ids = set(Project.objects.filter(organization=org).values_list('id', flat=True))
+    member_ids = set(
+        OrganizationAccess.objects.filter(organization=org).values_list('user_id', flat=True)
+    )
+
+    selected = set()
+    for raw in request.POST.getlist('access'):
+        project_raw, _, user_raw = str(raw).partition(':')
+        try:
+            pair = (int(project_raw), int(user_raw))
+        except ValueError:
+            continue
+        if pair[0] in project_ids and pair[1] in member_ids:
+            selected.add(pair)
+
+    # El diff se limita a proyectos de esta organización y a sus miembros, para
+    # no borrar accesos otorgados a usuarios de organizaciones compartidas.
+    current = set(
+        ProjectUserAccess.objects
+        .filter(project_id__in=project_ids, user_id__in=member_ids)
+        .values_list('project_id', 'user_id')
+    )
+    to_add = selected - current
+    to_remove = current - selected
+
+    with transaction.atomic():
+        if to_remove:
+            condition = Q()
+            for project_id, user_id in to_remove:
+                condition |= Q(project_id=project_id, user_id=user_id)
+            ProjectUserAccess.objects.filter(condition).delete()
+        if to_add:
+            ProjectUserAccess.objects.bulk_create(
+                [
+                    ProjectUserAccess(project_id=project_id, user_id=user_id)
+                    for project_id, user_id in to_add
+                ],
+                ignore_conflicts=True,
+            )
+
+    debug_event(
+        'proyecto.accesos.matriz_actualizada',
+        user_id=request.user.id,
+        org_id=org.id,
+        otorgados=len(to_add),
+        revocados=len(to_remove),
+    )
+
+    messages.success(
+        request,
+        f'Accesos a proyectos actualizados en "{org.name}": '
+        f'{len(to_add)} otorgado(s) y {len(to_remove)} revocado(s).'
+    )
+    return redirect(_proyectos_url(org.id))
 
 
 @superadmin_required

@@ -17,7 +17,7 @@
             </div>
             <h2 class="sa-dashboard-hero__title">Panel de control</h2>
             <p class="sa-dashboard-hero__subtitle">
-                Bienvenido, {{ user.first_name|default:user.username }}. Gestiona usuarios, organizaciones y tasas BCV del sistema.
+                Bienvenido, {{ user.first_name|default:user.username }}. Gestiona usuarios, organizaciones, proyectos y tasas BCV del sistema.
             </p>
         </div>
         <div class="sa-dashboard-hero__decor" aria-hidden="true">
@@ -42,6 +42,15 @@
             <div class="sa-stat-tile__data">
                 <span class="sa-stat-tile__value">{{ stats.users }}</span>
                 <span class="sa-stat-tile__label">Usuarios activos</span>
+            </div>
+        </article>
+        <article class="sa-stat-tile sa-stat-tile--projects">
+            <div class="sa-stat-tile__icon">
+                <i class="fa-solid fa-diagram-project"></i>
+            </div>
+            <div class="sa-stat-tile__data">
+                <span class="sa-stat-tile__value">{{ stats.projects }}</span>
+                <span class="sa-stat-tile__label">Proyectos</span>
             </div>
         </article>
         <article class="sa-stat-tile sa-stat-tile--access">
@@ -77,6 +86,16 @@
                 <div class="sa-module-card__body">
                     <h4 class="sa-module-card__title">Organizaciones</h4>
                     <p class="sa-module-card__desc">Alta, edición y permisos de usuarios por organización.</p>
+                </div>
+                <span class="sa-module-card__arrow"><i class="fa-solid fa-arrow-right"></i></span>
+            </a>
+            <a href="{% url 'superadmin_proyectos' %}" class="sa-module-card sa-module-card--projects">
+                <div class="sa-module-card__icon">
+                    <i class="fa-solid fa-diagram-project"></i>
+                </div>
+                <div class="sa-module-card__body">
+                    <h4 class="sa-module-card__title">Proyectos</h4>
+                    <p class="sa-module-card__desc">Proyectos de cada organización y accesos de sus miembros.</p>
                 </div>
                 <span class="sa-module-card__arrow"><i class="fa-solid fa-arrow-right"></i></span>
             </a>

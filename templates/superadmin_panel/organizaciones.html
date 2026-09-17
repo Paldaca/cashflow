@@ -53,6 +53,9 @@
                             <button type="button" class="cf-btn cf-btn--sm cf-btn--outline-secondary" title="Accesos" onclick="openAccessModal({{ org.id }}, '{{ org.name|escapejs }}', [{% for access in org.user_accesses.all %}{{ access.user_id }}{% if not forloop.last %},{% endif %}{% endfor %}])">
                                 <i class="fa-solid fa-users"></i>
                             </button>
+                            <a href="{% url 'superadmin_proyectos' %}#org-{{ org.id }}" class="cf-btn cf-btn--sm cf-btn--outline-secondary" title="Proyectos y accesos">
+                                <i class="fa-solid fa-diagram-project"></i>
+                            </a>
                             <button type="button" class="cf-btn cf-btn--sm cf-btn--outline-danger" title="Eliminar" onclick="confirmDeleteOrg({{ org.id }}, '{{ org.name|escapejs }}')">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
