@@ -71,7 +71,8 @@
 
 .sa-dashboard-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* auto-fit: reparte las tarjetas que haya (3 o 4) sin dejar huecos. */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1rem;
 }
 
@@ -1342,3 +1343,564 @@
     color: var(--text-subtle);
 }
 
+
+/* --- Proyectos por organización y accesos --- */
+.sa-stat-tile--projects {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), transparent 60%);
+}
+
+.sa-stat-tile--projects .sa-stat-tile__icon {
+    background: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+}
+
+.sa-module-card--projects .sa-module-card__icon {
+    background: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+}
+
+.sa-module-card--projects:hover .sa-module-card__arrow {
+    background: #7c3aed;
+    color: #fff;
+}
+
+.sa-proj-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.sa-proj-toolbar__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.sa-proj-search {
+    position: relative;
+    flex: 1 1 320px;
+    max-width: 420px;
+}
+
+.sa-proj-search > i {
+    position: absolute;
+    top: 50%;
+    left: 0.9rem;
+    transform: translateY(-50%);
+    color: var(--text-subtle);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.sa-proj-search .cf-input {
+    padding-left: 2.4rem;
+}
+
+.sa-proj-search--sm {
+    flex: 1 1 200px;
+    max-width: none;
+}
+
+.sa-proj-orgs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.sa-proj-org {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.sa-proj-org.is-open {
+    box-shadow: var(--shadow-soft);
+    border-color: var(--border-default);
+}
+
+.sa-proj-org__header {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+}
+
+.sa-proj-org__header:hover {
+    background: var(--bg-surface);
+}
+
+.sa-proj-org__chevron {
+    color: var(--text-subtle);
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.sa-proj-org.is-open .sa-proj-org__chevron {
+    transform: rotate(90deg);
+    color: var(--color-morado);
+}
+
+.sa-proj-org__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    background: var(--bg-muted);
+    color: var(--color-morado);
+    flex-shrink: 0;
+}
+
+.sa-proj-org__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.sa-proj-org__name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-main);
+}
+
+.sa-proj-org__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.sa-proj-org__meta i {
+    margin-right: 0.25rem;
+    opacity: 0.7;
+}
+
+.sa-proj-org__body {
+    border-top: 1px solid var(--border-subtle);
+}
+
+.sa-proj-org__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.85rem 1.25rem;
+    background: var(--bg-surface);
+}
+
+.sa-proj-org__hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.sa-proj-org__hint i {
+    margin-right: 0.3rem;
+    opacity: 0.7;
+}
+
+.sa-proj-org__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 2.25rem 1.25rem;
+    color: var(--text-muted);
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.sa-proj-org__empty i {
+    font-size: 1.75rem;
+    opacity: 0.4;
+}
+
+.sa-proj-table {
+    width: 100%;
+}
+
+/* Las utilidades cf-text-* pierden ante `.cf-table th/td`, así que la
+   alineación de estas columnas se fija aquí. */
+.sa-proj-table th.sa-proj-col-num,
+.sa-proj-table td.sa-proj-col-num {
+    text-align: center;
+    width: 1%;
+    white-space: nowrap;
+}
+
+.sa-proj-table th.sa-proj-col-actions,
+.sa-proj-table td.sa-proj-col-actions {
+    text-align: right;
+    width: 1%;
+    white-space: nowrap;
+}
+
+.sa-proj-name {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.sa-proj-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+    max-width: 380px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sa-proj-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.sa-proj-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem 0.2rem 0.2rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-pill);
+    background: var(--bg-surface);
+    font-size: 0.78rem;
+    color: var(--text-main);
+    max-width: 100%;
+}
+
+.sa-proj-chip__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-morado);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.sa-proj-chip--more {
+    padding: 0.2rem 0.6rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.sa-proj-noaccess {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-subtle);
+}
+
+.sa-proj-outside {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--color-warning);
+}
+
+.sa-proj-outside i {
+    margin-right: 0.25rem;
+}
+
+.sa-proj-no-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.sa-proj-no-results i {
+    font-size: 1.75rem;
+    opacity: 0.4;
+}
+
+/* Modales de accesos */
+.sa-proj-modal-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.85rem;
+}
+
+.sa-proj-modal-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.78rem;
+    color: var(--color-warning);
+}
+
+.sa-proj-modal-empty {
+    margin: 0;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.sa-access-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.sa-access-toolbar__actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.sa-access-item--member {
+    gap: 0.6rem;
+}
+
+.sa-access-item__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--bg-muted);
+    color: var(--color-morado);
+    font-size: 0.8rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.sa-access-item__info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    min-width: 0;
+}
+
+.sa-access-item__info strong {
+    font-size: 0.88rem;
+    color: var(--text-main);
+}
+
+.sa-access-item__info small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sa-access-item__tag {
+    margin-left: auto;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-border);
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sa-access-item--member input:checked ~ .sa-access-item__avatar {
+    background: var(--color-morado);
+    color: #fff;
+}
+
+/* Matriz miembros x proyectos */
+.cf-modal__dialog.sa-matrix-dialog {
+    width: min(1100px, 94vw);
+    max-width: none;
+}
+
+.sa-matrix-wrap {
+    overflow: auto;
+    max-height: 60vh;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+}
+
+.sa-matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+}
+
+.sa-matrix th,
+.sa-matrix td {
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0.6rem 0.75rem;
+    vertical-align: middle;
+}
+
+.sa-matrix tbody tr:last-child th,
+.sa-matrix tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.sa-matrix thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.sa-matrix .sa-matrix-corner {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    min-width: 200px;
+    text-align: left;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+}
+
+.sa-matrix-col-head {
+    min-width: 130px;
+    max-width: 190px;
+}
+
+.sa-matrix-col {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.sa-matrix-col input {
+    accent-color: var(--color-morado);
+    width: 0.95rem;
+    height: 0.95rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.sa-matrix-col__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sa-matrix-member {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    display: table-cell;
+    background: var(--bg-card);
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.sa-matrix-member .sa-access-item__avatar,
+.sa-matrix-member .sa-access-item__info {
+    vertical-align: middle;
+}
+
+.sa-matrix-member .sa-access-item__avatar {
+    margin-right: 0.5rem;
+}
+
+.sa-matrix-member .sa-access-item__info {
+    display: inline-flex;
+}
+
+.sa-matrix tbody tr:hover .sa-matrix-member,
+.sa-matrix tbody tr:hover .sa-matrix-cell-wrap {
+    background: var(--bg-surface);
+}
+
+.sa-matrix-cell-wrap {
+    text-align: center;
+    background: var(--bg-card);
+}
+
+.sa-matrix-cell {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.sa-matrix-cell input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.sa-matrix-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
+    background: var(--bg-body);
+    color: transparent;
+    font-size: 0.72rem;
+    transition: var(--transition);
+}
+
+.sa-matrix-cell:hover .sa-matrix-mark {
+    border-color: var(--color-morado);
+}
+
+.sa-matrix-cell input:focus-visible + .sa-matrix-mark {
+    outline: 2px solid var(--color-morado);
+    outline-offset: 2px;
+}
+
+.sa-matrix-cell input:checked + .sa-matrix-mark {
+    background: var(--color-morado);
+    border-color: var(--color-morado);
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .sa-proj-org__header {
+        padding: 0.85rem 1rem;
+    }
+
+    .sa-proj-org__actions {
+        padding: 0.75rem 1rem;
+    }
+
+    .sa-proj-search {
+        max-width: none;
+    }
+
+    .sa-proj-desc {
+        white-space: normal;
+    }
+}

@@ -53,6 +53,10 @@
                 <i class="fa-solid fa-building app-sidebar-icon" aria-hidden="true"></i>
                 <span class="app-sidebar-label">Organizaciones</span>
             </a>
+            <a href="{% url 'superadmin_proyectos' %}" class="app-sidebar-link{% if 'superadmin_' in current_url and 'proyecto' in current_url %} is-active{% endif %}">
+                <i class="fa-solid fa-diagram-project app-sidebar-icon" aria-hidden="true"></i>
+                <span class="app-sidebar-label">Proyectos</span>
+            </a>
             <a href="{% url 'superadmin_tasas_bcv' %}" class="app-sidebar-link{% if 'tasas_bcv' in current_url or 'tasa_bcv' in current_url %} is-active{% endif %}">
                 <i class="fa-solid fa-calendar-days app-sidebar-icon" aria-hidden="true"></i>
                 <span class="app-sidebar-label">Tasas BCV</span>

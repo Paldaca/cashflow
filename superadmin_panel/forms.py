@@ -257,6 +257,21 @@ class OrganizationAccessForm(forms.Form):
     )
 
 
+class ProjectAccessForm(forms.Form):
+    """Usuarios marcados en el modal de accesos de un proyecto.
+
+    Acepta cualquier usuario existente; la vista es la que recorta la selección
+    a los miembros elegibles (organización dueña del proyecto y organizaciones
+    con las que esté compartido).
+    """
+    users = forms.ModelMultipleChoiceField(
+        queryset=User.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='Usuarios con acceso al proyecto',
+    )
+
+
 class BcvRateForm(forms.ModelForm):
     class Meta:
         model = ExchangeRateHistory
